@@ -4,8 +4,10 @@
  */
 
 import React, { useState, useEffect, useRef } from "react";
-import { ArrowUpRight, Loader2, Video } from "lucide-react";
+import { ArrowUpRight, Loader2, Video, Box, Download, Eye } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { stylizeRoomImage, generateCinematicVideo } from "./utils/scriptStylizer";
+import ThreeRoomScene from "./three/ThreeRoomScene";
 
 type Screen = "welcome" | "countdown" | "loading" | "cards";
 
@@ -82,6 +84,8 @@ declare global {
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>("welcome");
+  const [view3D, setView3D] = useState(false);
+  const [isComparing, setIsComparing] = useState(false);
   const [hasLinkedKey, setHasLinkedKey] = useState(false);
   const [bottomSheetOpen, setBottomSheetOpen] = useState(false);
   const [uploaded, setUploaded] = useState(false);
@@ -93,6 +97,15 @@ export default function App() {
 
   const [videoStatus, setVideoStatus] = useState<Record<string, 'generating' | 'polling' | 'ready' | 'failed'>>({});
   const [videos, setVideos] = useState<Record<string, string>>({});
+
+  const handleDownloadImage = (styleId: string, styleName: string) => {
+    const imgUrl = images[styleId];
+    if (!imgUrl) return;
+    const link = document.createElement("a");
+    link.download = `space-lift-${styleId}-${Date.now()}.jpg`;
+    link.href = imgUrl;
+    link.click();
+  };
 
   const [cameraActive, setCameraActive] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -185,17 +198,14 @@ export default function App() {
     fetchingRef.current.add(style.id);
 
     try {
-      const res = await fetch("/api/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: style.prompt, imageBase64: overrideImage || uploadedImage }),
-      });
-      const data = await res.json();
-      if (res.ok && data.imageUrl) {
-        setImages((prev) => ({ ...prev, [style.id]: data.imageUrl }));
-      }
+      const sourceImage = overrideImage || uploadedImage;
+      if (!sourceImage) return;
+
+      // Execute script-based visual styling
+      const stylizedImage = await stylizeRoomImage(sourceImage, style.id);
+      setImages((prev) => ({ ...prev, [style.id]: stylizedImage }));
     } catch (e) {
-      console.error("Failed to fetch image for", style.name, e);
+      console.error("Failed to generate stylized image with script for", style.name, e);
     }
   };
 
@@ -205,52 +215,13 @@ export default function App() {
     setVideoStatus(prev => ({ ...prev, [styleId]: 'generating' }));
 
     try {
-      const mimeMatch = base64Image.match(/^data:(image\/[a-zA-Z]*);base64,([^"]*)$/);
-      if (!mimeMatch) throw new Error("Invalid image format");
-      const mimeType = mimeMatch[1];
-      const data = mimeMatch[2];
-      
-      const productImages = [{ mimeType, data }];
-
-      const promptRes = await fetch('/api/generate-prompt', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ productDesc: styleDesc, productImages })
-      });
-      if (!promptRes.ok) throw new Error("Failed to generate prompt");
-      const { prompt } = await promptRes.json();
-
-      const videoRes = await fetch('/api/generate-video', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, productImages })
-      });
-      if (!videoRes.ok) throw new Error("Failed to generate video");
-      const { fileId } = await videoRes.json();
-      
-      setVideoStatus(prev => ({ ...prev, [styleId]: 'polling' }));
-
-      const pollTimer = setInterval(async () => {
-        try {
-          const statusRes = await fetch(`/api/file-status/${fileId}`);
-          if (statusRes.ok) {
-            const { state } = await statusRes.json();
-            if (state === 'ACTIVE') {
-              clearInterval(pollTimer);
-              setVideos(prev => ({ ...prev, [styleId]: fileId }));
-              setVideoStatus(prev => ({ ...prev, [styleId]: 'ready' }));
-            } else if (state === 'FAILED') {
-              clearInterval(pollTimer);
-              setVideoStatus(prev => ({ ...prev, [styleId]: 'failed' }));
-            }
-          }
-        } catch (e) {
-          console.error("Poll error", e);
-        }
-      }, 3000);
-
+      const style = STYLE_CONFIGS.find(s => s.id === styleId);
+      // Execute script-based cinematic camera dolly & lighting sweep rendering
+      const videoUrl = await generateCinematicVideo(base64Image, style?.name || styleId);
+      setVideos(prev => ({ ...prev, [styleId]: videoUrl }));
+      setVideoStatus(prev => ({ ...prev, [styleId]: 'ready' }));
     } catch (e) {
-      console.error(e);
+      console.error("Failed to generate cinematic video with script:", e);
       setVideoStatus(prev => ({ ...prev, [styleId]: 'failed' }));
     }
   };
@@ -260,22 +231,8 @@ export default function App() {
     setCountdown(5);
   };
 
-  const handleStartGenerating = async (e?: React.MouseEvent) => {
+  const handleStartGenerating = (e?: React.MouseEvent) => {
     if (e) e.preventDefault();
-    
-    if (!hasLinkedKey) {
-      if (window.aistudio && window.aistudio.openSelectKey) {
-        const success = await window.aistudio.openSelectKey();
-        if (success !== false) {
-          setHasLinkedKey(true);
-          startGenerating();
-        }
-        return;
-      } else {
-        console.warn("AI Studio native context not found.");
-      }
-    }
-    
     startGenerating();
   };
 
@@ -315,6 +272,15 @@ export default function App() {
       }
     }
   };
+
+  if (view3D) {
+    return (
+      <ThreeRoomScene
+        initialStyleId={STYLE_CONFIGS[currentIndex]?.id || 'japandi'}
+        onClose={() => setView3D(false)}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#EAE9E4] flex flex-col font-sans text-[#222222] overflow-hidden relative">
@@ -374,12 +340,30 @@ export default function App() {
               {uploaded ? "Let's pick some styles" : "Upload a photo of your room"}
             </button>
 
-            <div className="w-full max-w-sm mt-8 text-[10px] text-[#222222]/40 text-center leading-relaxed">
-              <p className="mb-2">
-                By using this feature, you confirm that you have the necessary rights to any content that you upload. Do not generate content that infringes on others’ intellectual property or privacy rights. Your use of this generative AI service is subject to our <a href="https://policies.google.com/terms/generative-ai/use-policy" target="_blank" rel="noopener noreferrer" className="underline hover:text-[#222222]">Prohibited Use Policy</a>.
-              </p>
+            {!uploaded && (
+              <button
+                type="button"
+                onClick={handleDemoUpload}
+                className="w-full max-w-sm rounded-[32px] border border-[#222222]/15 bg-white/70 hover:bg-white text-[#222222]/80 py-3 text-center text-xs font-semibold tracking-wider uppercase shadow-xs active:scale-[0.98] transition-all mt-3 cursor-pointer"
+              >
+                Preizkusi s testno sobo (Demo)
+              </button>
+            )}
+
+            {!uploaded && (
+              <button
+                type="button"
+                onClick={() => setView3D(true)}
+                className="w-full max-w-sm rounded-[32px] border border-amber-600/30 bg-[#222222] hover:bg-[#333333] text-white py-3.5 text-center text-xs font-semibold tracking-wider uppercase shadow-xs active:scale-[0.98] transition-all mt-2.5 cursor-pointer flex items-center justify-center gap-2"
+              >
+                <Box className="w-4 h-4 text-amber-400" />
+                <span>Interaktivna 3D soba (Three.js)</span>
+              </button>
+            )}
+
+            <div className="w-full max-w-sm mt-8 text-[11px] text-[#222222]/40 text-center leading-relaxed">
               <p>
-                Please note that uploads, including those from Google Workspace, may be used to develop and improve Google products and services in accordance with our <a href="https://ai.google.dev/gemini-api/terms" target="_blank" rel="noopener noreferrer" className="underline hover:text-[#222222]">terms</a>.
+                Predogled in vizualizacija prostora delujeta s pomočjo optimiziranih skript za obdelavo slik in kinematično animacijo v realnem času.
               </p>
             </div>
           </motion.div>
@@ -481,22 +465,31 @@ export default function App() {
 
       {screen === "cards" && (
         <div className="flex-1 flex flex-col items-center justify-center p-4 relative">
-          <button
-            onClick={() => {
-              fetchingRef.current.clear();
-              setUploaded(false);
-              setUploadedImage(null);
-              setCurrentIndex(0);
-              setImages({});
-              setVideos({});
-              setVideoStatus({});
-              setScreen("welcome");
-            }}
-            className="absolute top-6 left-6 z-50 text-sm font-medium text-[#222222]/60 hover:text-[#222222] transition-colors cursor-pointer"
-          >
-            Start Over
-          </button>
-          <div className="w-full max-w-sm relative grid">
+          <div className="absolute top-6 left-6 right-6 z-50 flex items-center justify-between">
+            <button
+              onClick={() => {
+                fetchingRef.current.clear();
+                setUploaded(false);
+                setUploadedImage(null);
+                setCurrentIndex(0);
+                setImages({});
+                setVideos({});
+                setVideoStatus({});
+                setScreen("welcome");
+              }}
+              className="text-sm font-medium text-[#222222]/60 hover:text-[#222222] transition-colors cursor-pointer"
+            >
+              Start Over
+            </button>
+            <button
+              onClick={() => setView3D(true)}
+              className="flex items-center gap-1.5 text-xs font-semibold bg-white text-[#222222] px-3.5 py-2 rounded-full border border-[#222222]/15 shadow-sm hover:bg-[#faf9f6] active:scale-95 transition-all cursor-pointer"
+            >
+              <Box className="w-4 h-4 text-amber-600" />
+              <span>3D Soba</span>
+            </button>
+          </div>
+          <div className="w-full max-w-sm relative grid mt-6">
             <AnimatePresence initial={false}>
               {currentIndex < STYLE_CONFIGS.length ? (
                 <motion.div
@@ -512,15 +505,21 @@ export default function App() {
                   style={{ touchAction: "none" }}
                 >
                   <div className="p-4 relative flex-none">
-                    <div className="w-full aspect-[4/3] rounded-[20px] overflow-hidden bg-[#EAE9E4]/60 flex items-center justify-center relative">
-                      {videos[STYLE_CONFIGS[currentIndex].id] ? (
+                    <div className="w-full aspect-[4/3] rounded-[20px] overflow-hidden bg-[#EAE9E4]/60 flex items-center justify-center relative select-none">
+                      {isComparing && uploadedImage ? (
+                        <img
+                          src={uploadedImage}
+                          className="w-full h-full object-cover pointer-events-none"
+                          alt="Original soba"
+                        />
+                      ) : videos[STYLE_CONFIGS[currentIndex].id] ? (
                         <video
                            autoPlay
                            loop
                            muted
                            playsInline
                            className="w-full h-full object-cover"
-                           src={`/api/video/${videos[STYLE_CONFIGS[currentIndex].id]}`}
+                           src={videos[STYLE_CONFIGS[currentIndex].id].startsWith('blob:') || videos[STYLE_CONFIGS[currentIndex].id].startsWith('data:') ? videos[STYLE_CONFIGS[currentIndex].id] : `/api/video/${videos[STYLE_CONFIGS[currentIndex].id]}`}
                         />
                       ) : images[STYLE_CONFIGS[currentIndex].id] ? (
                         <motion.img
@@ -532,6 +531,22 @@ export default function App() {
                         />
                       ) : (
                         <Loader2 className="w-8 h-8 animate-spin text-[#222222]/30" />
+                      )}
+
+                      {/* State Badge */}
+                      <div className="absolute top-3 left-3 bg-[#1c1d22]/80 text-white text-[10px] font-semibold tracking-wider px-2.5 py-1 rounded-full uppercase shadow-xs">
+                        {isComparing ? 'Original soba' : STYLE_CONFIGS[currentIndex].name}
+                      </div>
+
+                      {/* Download Button on image */}
+                      {images[STYLE_CONFIGS[currentIndex].id] && !isComparing && (
+                        <button
+                          onClick={() => handleDownloadImage(STYLE_CONFIGS[currentIndex].id, STYLE_CONFIGS[currentIndex].name)}
+                          title="Prenesi stilizirano sliko"
+                          className="absolute top-3 right-3 bg-white/90 hover:bg-white text-[#222222] p-2 rounded-full shadow-sm active:scale-90 transition-transform cursor-pointer"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                        </button>
                       )}
                     </div>
                   </div>
@@ -546,12 +561,36 @@ export default function App() {
                     </h2>
                   </div>
 
-                  <div className="px-6 mt-auto flex items-center gap-3">
-                    <div className="border border-[#222222]/15 rounded-full px-5 py-2.5 bg-white">
-                      <span className="text-[#222222] text-sm font-medium tracking-wide">
+                  <div className="px-6 mt-auto flex items-center gap-2">
+                    <div className="border border-[#222222]/15 rounded-full px-3.5 py-2.5 bg-white shrink-0">
+                      <span className="text-[#222222] text-xs font-semibold tracking-wide">
                         {STYLE_CONFIGS[currentIndex].name}
                       </span>
                     </div>
+
+                    {/* Hold to Compare Button */}
+                    {uploadedImage && (
+                      <button
+                        onMouseDown={() => setIsComparing(true)}
+                        onMouseUp={() => setIsComparing(false)}
+                        onTouchStart={() => setIsComparing(true)}
+                        onTouchEnd={() => setIsComparing(false)}
+                        title="Držite za primerjavo z originalom"
+                        className="h-11 px-3 rounded-full border border-[#222222]/15 flex items-center justify-center gap-1 bg-white shrink-0 shadow-xs active:bg-[#222222] active:text-white transition-all text-xs font-medium text-[#222222] cursor-pointer"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Primerjaj</span>
+                      </button>
+                    )}
+
+                    <button 
+                      onClick={() => setView3D(true)}
+                      title="Odpri ta stil v interaktivnem 3D pogledu"
+                      className="h-11 px-3.5 rounded-full border border-[#222222]/15 flex items-center justify-center gap-1 bg-white shrink-0 shadow-sm active:scale-95 transition-transform text-xs font-semibold text-[#222222] cursor-pointer"
+                    >
+                      <Box className="w-3.5 h-3.5 text-amber-600" />
+                      <span>3D</span>
+                    </button>
                     <button 
                       onClick={() => {
                         const base64 = images[STYLE_CONFIGS[currentIndex].id];
@@ -560,7 +599,8 @@ export default function App() {
                         }
                       }}
                       disabled={videoStatus[STYLE_CONFIGS[currentIndex].id] === 'generating' || videoStatus[STYLE_CONFIGS[currentIndex].id] === 'polling'}
-                      className="w-11 h-11 rounded-full border border-[#222222]/15 flex items-center justify-center bg-white shrink-0 shadow-sm active:scale-95 transition-transform disabled:opacity-50 disabled:active:scale-100"
+                      className="w-11 h-11 rounded-full border border-[#222222]/15 flex items-center justify-center bg-white shrink-0 shadow-sm active:scale-95 transition-transform disabled:opacity-50 disabled:active:scale-100 ml-auto cursor-pointer"
+                      title="Ustvari video"
                     >
                       {videoStatus[STYLE_CONFIGS[currentIndex].id] === 'generating' || videoStatus[STYLE_CONFIGS[currentIndex].id] === 'polling' ? (
                         <Loader2 className="w-5 h-5 text-[#222222] animate-spin" />
