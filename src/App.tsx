@@ -4,75 +4,33 @@
  */
 
 import React, { useState, useEffect, useRef } from "react";
-import { ArrowUpRight, Loader2, Video, Box, Download, Eye } from "lucide-react";
+import { 
+  ArrowUpRight, 
+  Loader2, 
+  Video, 
+  Box, 
+  Download, 
+  Eye, 
+  Columns2, 
+  LayoutGrid, 
+  Sparkles, 
+  FileText, 
+  Layers, 
+  Check, 
+  RotateCcw,
+  Palette,
+  Heart,
+  Sliders,
+  ArrowLeftRight
+} from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { stylizeRoomImage, generateCinematicVideo } from "./utils/scriptStylizer";
+import { STYLE_CONFIGS, StyleConfig, ROOM_TYPES, RoomTypeConfig } from "./data/styleData";
 import ThreeRoomScene from "./three/ThreeRoomScene";
+import MoodboardModal from "./components/MoodboardModal";
+import ImageTuneModal from "./components/ImageTuneModal";
 
 type Screen = "welcome" | "countdown" | "loading" | "cards";
-
-const STYLE_CONFIGS = [
-  {
-    id: "japandi",
-    name: "Japandi",
-    description: "Japandi minimalism blends serene Scandinavian functionality with Japanese rustic warmth to create peace.",
-    prompt: "Interior design of a living room, Japandi style, earthy neutrals, low platform light wood furniture, zero clutter, minimalist ceramic decor, neutral palette",
-  },
-  {
-    id: "industrial",
-    name: "Industrial Modern",
-    description: "Industrial Modern embraces raw architectural elements with charcoal tones and exposed brick for an urban edge.",
-    prompt: "Interior design of a living room, Industrial Modern style, charcoal tones, exposed brick wall, distressed leather sofa, iron pipe detailing, large industrial windows",
-  },
-  {
-    id: "midcentury",
-    name: "Mid-Century Modern",
-    description: "Mid-Century Modern pairs warm retro aesthetics with sleek lines, peg legs, and vibrant autumnal accent colors.",
-    prompt: "Interior design of a living room, Mid-Century Modern style, tapered peg legs on furniture, rich walnut wood finishes, mustard yellow and burnt orange accents",
-  },
-  {
-    id: "biophilic",
-    name: "Biophilic",
-    description: "Biophilic design brings the outdoors inside, layering abundant plant life with natural rattan and cream fabrics.",
-    prompt: "Interior design of a living room, Biophilic Urban Jungle style, abundant indoor green plants, hanging vines, rattan accents, plush cream fabrics, natural sunlight",
-  },
-  {
-    id: "luxury",
-    name: "Luxury Contemporary",
-    description: "Luxury Contemporary exudes opulence through rich boucle textures, polished marble tables, and refined brass hardware.",
-    prompt: "Interior design of a living room, Luxury Contemporary style, plush boucle textures, elegant polished marble coffee table, gold and brass hardware accents, sophisticated lighting",
-  },
-  {
-    id: "bohemian",
-    name: "Bohemian Chic",
-    description: "Bohemian Chic layers eclectic patterns, vintage rugs, and macrame accents for a free-spirited, relaxed aesthetic.",
-    prompt: "Interior design of a living room, Bohemian Chic style, eclectic patterns, vintage rugs, macrame wall hangings, warm earthy tones, lots of textures, relaxed vibe",
-  },
-  {
-    id: "minimalist",
-    name: "Pure Minimalist",
-    description: "Pure Minimalist focuses on the essentials with clean white walls, hidden storage, and singular statement pieces.",
-    prompt: "Interior design of a living room, Pure Minimalist style, clean white walls, hidden storage, singular statement furniture pieces, monotone palette, ample negative space",
-  },
-  {
-    id: "coastal",
-    name: "Modern Coastal",
-    description: "Modern Coastal blends breezy light blues, whitewashed driftwood, and natural linen for a relaxed beachside feel.",
-    prompt: "Interior design of a living room, Modern Coastal style, breezy light blues, whitewashed driftwood furniture, natural linen fabrics, airy and bright, beachside atmosphere",
-  },
-  {
-    id: "artdeco",
-    name: "Art Deco",
-    description: "Art Deco brings glamorous symmetry to life with geometric patterns, velvet seating, and bold jewel tones.",
-    prompt: "Interior design of a living room, Art Deco style, geometric patterns, velvet seating, bold jewel tones, mirrored surfaces, glamorous metallic accents",
-  },
-  {
-    id: "farmhouse",
-    name: "Modern Farmhouse",
-    description: "Modern Farmhouse pairs rustic shiplap walls and reclaimed woods with sleek black iron fixtures for a cozy appeal.",
-    prompt: "Interior design of a living room, Modern Farmhouse style, rustic shiplap walls, reclaimed wood furniture, sleek black iron fixtures, cozy and inviting, neutral tones",
-  }
-];
 
 declare global {
   interface Window {
@@ -85,8 +43,40 @@ declare global {
 export default function App() {
   const [screen, setScreen] = useState<Screen>("welcome");
   const [view3D, setView3D] = useState(false);
+  const [selected3DStyleId, setSelected3DStyleId] = useState<string>("japandi");
+  const [activeMoodboardStyle, setActiveMoodboardStyle] = useState<StyleConfig | null>(null);
+  const [tuneTargetStyle, setTuneTargetStyle] = useState<{ id: string; name: string; image: string } | null>(null);
+  const [isGridView, setIsGridView] = useState<boolean>(false);
+  const [filterFavoritesOnly, setFilterFavoritesOnly] = useState<boolean>(false);
+
+  // Favorites state persisted to localStorage
+  const [favorites, setFavorites] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('space_lift_favs') || '[]');
+    } catch {
+      return [];
+    }
+  });
+
+  const toggleFavorite = (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setFavorites(prev => {
+      const next = prev.includes(id) ? prev.filter(f => f !== id) : [...prev, id];
+      try {
+        localStorage.setItem('space_lift_favs', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  };
+
+  // Compare & Split Modes
   const [isComparing, setIsComparing] = useState(false);
-  const [hasLinkedKey, setHasLinkedKey] = useState(false);
+  const [isSplitMode, setIsSplitMode] = useState(false);
+  const [splitModeType, setSplitModeType] = useState<'original' | 'dualStyle'>('original');
+  const [dualCompareRightStyleId, setDualCompareRightStyleId] = useState<string>('midcentury');
+  const [splitPercent, setSplitPercent] = useState(50);
+  const splitContainerRef = useRef<HTMLDivElement>(null);
+
   const [bottomSheetOpen, setBottomSheetOpen] = useState(false);
   const [uploaded, setUploaded] = useState(false);
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
@@ -98,6 +88,14 @@ export default function App() {
   const [videoStatus, setVideoStatus] = useState<Record<string, 'generating' | 'polling' | 'ready' | 'failed'>>({});
   const [videos, setVideos] = useState<Record<string, string>>({});
 
+  const [cameraActive, setCameraActive] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Room type selection
+  const [selectedRoomType, setSelectedRoomType] = useState<'living' | 'bedroom' | 'office' | 'dining'>('living');
+
   const handleDownloadImage = (styleId: string, styleName: string) => {
     const imgUrl = images[styleId];
     if (!imgUrl) return;
@@ -107,10 +105,95 @@ export default function App() {
     link.click();
   };
 
-  const [cameraActive, setCameraActive] = useState(false);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const handleDownloadComparison = async () => {
+    const leftImgSrc = splitModeType === 'dualStyle' ? images[STYLE_CONFIGS[currentIndex].id] : uploadedImage;
+    const rightImgSrc = splitModeType === 'dualStyle' 
+      ? images[dualCompareRightStyleId] 
+      : images[STYLE_CONFIGS[currentIndex].id];
+    
+    if (!leftImgSrc || !rightImgSrc) return;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 1200;
+    canvas.height = 900;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const loadImg = (src: string): Promise<HTMLImageElement> => new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = src;
+    });
+
+    try {
+      const [lImg, rImg] = await Promise.all([loadImg(leftImgSrc), loadImg(rightImgSrc)]);
+
+      const splitX = (canvas.width * splitPercent) / 100;
+
+      // Draw right image
+      ctx.drawImage(rImg, 0, 0, canvas.width, canvas.height);
+
+      // Draw left clipped image
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, 0, splitX, canvas.height);
+      ctx.clip();
+      ctx.drawImage(lImg, 0, 0, canvas.width, canvas.height);
+      ctx.restore();
+
+      // Draw divider line
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(splitX, 0);
+      ctx.lineTo(splitX, canvas.height);
+      ctx.stroke();
+
+      // Divider handle circle
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(splitX, canvas.height / 2, 22, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#222222';
+      ctx.font = 'bold 20px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('↔', splitX, canvas.height / 2);
+
+      // Left label pill
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'alphabetic';
+      ctx.font = 'bold 22px sans-serif';
+      const leftText = splitModeType === 'dualStyle' ? STYLE_CONFIGS[currentIndex].name : 'Original';
+      const leftWidth = ctx.measureText(leftText).width + 36;
+      ctx.fillStyle = 'rgba(28, 29, 34, 0.85)';
+      ctx.roundRect ? ctx.roundRect(24, canvas.height - 65, leftWidth, 42, 21) : ctx.fillRect(24, canvas.height - 65, leftWidth, 42);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(leftText, 42, canvas.height - 37);
+
+      // Right label pill
+      const rightText = splitModeType === 'dualStyle' 
+        ? (STYLE_CONFIGS.find(s => s.id === dualCompareRightStyleId)?.name || dualCompareRightStyleId)
+        : STYLE_CONFIGS[currentIndex].name;
+      const rightWidth = ctx.measureText(rightText).width + 36;
+      ctx.fillStyle = 'rgba(28, 29, 34, 0.85)';
+      ctx.roundRect ? ctx.roundRect(canvas.width - rightWidth - 24, canvas.height - 65, rightWidth, 42, 21) : ctx.fillRect(canvas.width - rightWidth - 24, canvas.height - 65, rightWidth, 42);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(rightText, canvas.width - rightWidth - 6, canvas.height - 37);
+
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
+      const link = document.createElement('a');
+      link.download = `space-lift-primerjava-${Date.now()}.jpg`;
+      link.href = dataUrl;
+      link.click();
+    } catch (err) {
+      console.error('Failed to export comparison image:', err);
+    }
+  };
 
   useEffect(() => {
     if (cameraActive && videoRef.current && streamRef.current) {
@@ -163,14 +246,13 @@ export default function App() {
         setUploadedImage(base64);
         setBottomSheetOpen(false);
         setUploaded(true);
-        // Start pre-fetching images immediately
         fetchImage(0, base64).then(() => fetchImage(1, base64));
       };
       reader.readAsDataURL(file);
     }
   };
 
-  // TEMPORARY DEMO CODE
+  // Demo room test
   const handleDemoUpload = async () => {
     try {
       const response = await fetch('/test-image2.jpeg');
@@ -188,7 +270,6 @@ export default function App() {
       console.error("Demo image not found", e);
     }
   };
-  // END TEMPORARY DEMO CODE
 
   const fetchImage = async (styleIndex: number, overrideImage?: string) => {
     if (styleIndex >= STYLE_CONFIGS.length) return;
@@ -201,7 +282,6 @@ export default function App() {
       const sourceImage = overrideImage || uploadedImage;
       if (!sourceImage) return;
 
-      // Execute script-based visual styling
       const stylizedImage = await stylizeRoomImage(sourceImage, style.id);
       setImages((prev) => ({ ...prev, [style.id]: stylizedImage }));
     } catch (e) {
@@ -209,14 +289,20 @@ export default function App() {
     }
   };
 
-  const generateVideo = async (styleId: string, base64Image: string, styleDesc: string) => {
+  const fetchAllRemainingImages = () => {
+    if (!uploadedImage) return;
+    for (let i = 0; i < STYLE_CONFIGS.length; i++) {
+      fetchImage(i);
+    }
+  };
+
+  const generateVideo = async (styleId: string, base64Image: string) => {
     if (videoStatus[styleId]) return;
 
     setVideoStatus(prev => ({ ...prev, [styleId]: 'generating' }));
 
     try {
       const style = STYLE_CONFIGS.find(s => s.id === styleId);
-      // Execute script-based cinematic camera dolly & lighting sweep rendering
       const videoUrl = await generateCinematicVideo(base64Image, style?.name || styleId);
       setVideos(prev => ({ ...prev, [styleId]: videoUrl }));
       setVideoStatus(prev => ({ ...prev, [styleId]: 'ready' }));
@@ -258,7 +344,6 @@ export default function App() {
     }
   }, [screen, images]);
 
-  // Eagerly fetch the next image whenever the current index changes
   useEffect(() => {
     if (screen === "cards") {
       fetchImage(currentIndex + 1);
@@ -273,17 +358,63 @@ export default function App() {
     }
   };
 
+  const handleOpen3DWithStyle = (styleId: string) => {
+    setSelected3DStyleId(styleId);
+    setView3D(true);
+  };
+
+  const handleReset = () => {
+    fetchingRef.current.clear();
+    setUploaded(false);
+    setUploadedImage(null);
+    setCurrentIndex(0);
+    setImages({});
+    setVideos({});
+    setVideoStatus({});
+    setIsGridView(false);
+    setIsSplitMode(false);
+    setIsComparing(false);
+    setScreen("welcome");
+  };
+
+  // Filtered styles for grid view
+  const displayedStyles = filterFavoritesOnly
+    ? STYLE_CONFIGS.filter(s => favorites.includes(s.id))
+    : STYLE_CONFIGS;
+
   if (view3D) {
     return (
       <ThreeRoomScene
-        initialStyleId={STYLE_CONFIGS[currentIndex]?.id || 'japandi'}
+        initialStyleId={selected3DStyleId || STYLE_CONFIGS[currentIndex]?.id || 'japandi'}
         onClose={() => setView3D(false)}
       />
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#EAE9E4] flex flex-col font-sans text-[#222222] overflow-hidden relative">
+    <div className="min-h-screen bg-[#EAE9E4] flex flex-col font-sans text-[#222222] overflow-x-hidden relative">
+      {/* Architectural Moodboard Modal */}
+      {activeMoodboardStyle && (
+        <MoodboardModal
+          style={activeMoodboardStyle}
+          previewImage={images[activeMoodboardStyle.id]}
+          onClose={() => setActiveMoodboardStyle(null)}
+          onOpen3D={() => handleOpen3DWithStyle(activeMoodboardStyle.id)}
+        />
+      )}
+
+      {/* Image Fine-Tuner Modal */}
+      {tuneTargetStyle && (
+        <ImageTuneModal
+          styleName={tuneTargetStyle.name}
+          sourceImage={tuneTargetStyle.image}
+          onClose={() => setTuneTargetStyle(null)}
+          onApply={(tunedBase64) => {
+            setImages(prev => ({ ...prev, [tuneTargetStyle.id]: tunedBase64 }));
+          }}
+        />
+      )}
+
       <AnimatePresence mode="wait">
         {screen === "welcome" && (
           <motion.div
@@ -305,16 +436,49 @@ export default function App() {
               <>
                 <div className="text-[80px] leading-none mb-4">🛋️</div>
                 <h1 className="text-[39px] font-syncopate font-bold mb-4 tracking-tight text-center">Space Lift</h1>
-                <p className="text-[#222222]/60 mb-4 text-center px-4">Explore how you can visualize your room in different Interior design styles within seconds</p>
+                <p className="text-[#222222]/60 mb-4 text-center px-4">
+                  Raziščite in vizualizirajte svojo sobo v 10 vrhunskih slogih notranjega oblikovanja v nekaj sekundah
+                </p>
               </>
+            )}
+
+            {!uploaded && (
+              <div className="w-full max-w-sm mb-4 animate-in fade-in duration-300">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-[#222222]/50 text-center mb-2">
+                  Izberite prostor za preobrazbo
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {ROOM_TYPES.map((rt) => {
+                    const isSelected = selectedRoomType === rt.id;
+                    return (
+                      <button
+                        key={rt.id}
+                        type="button"
+                        onClick={() => setSelectedRoomType(rt.id)}
+                        className={`p-2.5 rounded-2xl border text-left transition-all cursor-pointer flex items-center gap-2.5 ${
+                          isSelected
+                            ? 'bg-white border-[#222222] shadow-sm font-semibold scale-101'
+                            : 'bg-white/50 border-[#222222]/10 hover:bg-white/80'
+                        }`}
+                      >
+                        <span className="text-xl shrink-0">{rt.icon}</span>
+                        <div className="min-w-0">
+                          <div className="text-xs text-[#222222] truncate font-medium">{rt.name}</div>
+                          <div className="text-[10px] text-[#222222]/50 truncate">{rt.defaultArea} m²</div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             )}
 
             {!uploaded && (
               <button
                 onClick={startCamera}
-                className="w-full max-w-sm rounded-[32px] bg-[#222222] text-white py-4 text-center font-medium shadow-sm active:scale-[0.98] transition-transform mb-3 block"
+                className="w-full max-w-sm rounded-[32px] bg-[#222222] text-white py-4 text-center font-medium shadow-sm active:scale-[0.98] transition-transform mb-3 block cursor-pointer"
               >
-                Click a photo
+                Posnemi fotografijo
               </button>
             )}
 
@@ -334,10 +498,10 @@ export default function App() {
                   fileInputRef.current?.click();
                 }
               }}
-              className="w-full max-w-sm rounded-[32px] border border-[#222222]/10 bg-white py-4 text-center font-medium shadow-sm active:scale-[0.98] transition-transform"
+              className="w-full max-w-sm rounded-[32px] border border-[#222222]/10 bg-white py-4 text-center font-medium shadow-sm active:scale-[0.98] transition-transform cursor-pointer"
               style={uploaded ? { backgroundColor: "#222222", color: "white" } : {}}
             >
-              {uploaded ? "Let's pick some styles" : "Upload a photo of your room"}
+              {uploaded ? "Ogled slogov notranjega oblikovanja" : "Naloži fotografijo sobe"}
             </button>
 
             {!uploaded && (
@@ -353,7 +517,10 @@ export default function App() {
             {!uploaded && (
               <button
                 type="button"
-                onClick={() => setView3D(true)}
+                onClick={() => {
+                  setSelected3DStyleId("japandi");
+                  setView3D(true);
+                }}
                 className="w-full max-w-sm rounded-[32px] border border-amber-600/30 bg-[#222222] hover:bg-[#333333] text-white py-3.5 text-center text-xs font-semibold tracking-wider uppercase shadow-xs active:scale-[0.98] transition-all mt-2.5 cursor-pointer flex items-center justify-center gap-2"
               >
                 <Box className="w-4 h-4 text-amber-400" />
@@ -368,30 +535,30 @@ export default function App() {
             </div>
           </motion.div>
         )}
+      </AnimatePresence>
 
+      {/* Countdown Screen */}
+      <AnimatePresence>
         {screen === "countdown" && (
           <motion.div
-            key="countdown"
-            className="flex-1 flex flex-col items-center justify-center p-6 relative z-10 min-h-screen absolute inset-0 w-full"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="flex-1 flex flex-col items-center justify-center p-6 relative z-10"
           >
-            <AnimatePresence mode="wait">
-              {countdown > 0 && (
-                <motion.div
-                  key={countdown}
-                  initial={{ opacity: 0, scale: 0.8 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 1.2 }}
-                  transition={{ duration: 0.4 }}
-                >
-                  <h1 className="text-9xl font-semibold text-[#222222]">{countdown}</h1>
-                </motion.div>
-              )}
-            </AnimatePresence>
+            <div className="relative flex items-center justify-center">
+              <span className="text-[140px] font-bold font-syncopate tracking-tighter text-[#222222]">
+                {countdown}
+              </span>
+            </div>
+            <p className="text-[#222222]/60 mt-4 text-sm font-medium tracking-wide uppercase">
+              Uporaba algoritmov stiliziranja prostora...
+            </p>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Bottom Sheet Overlay */}
+      {/* Bottom Sheet for Upload Options */}
       <AnimatePresence>
         {bottomSheetOpen && (
           <>
@@ -399,8 +566,8 @@ export default function App() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-[#222222]/20 z-40"
               onClick={() => setBottomSheetOpen(false)}
+              className="fixed inset-0 bg-black/40 z-40"
             />
             <motion.div
               initial={{ y: "100%" }}
@@ -421,15 +588,15 @@ export default function App() {
                   setBottomSheetOpen(false);
                   startCamera();
                 }}
-                className="w-full text-center rounded-2xl bg-[#EAE9E4] py-4 font-medium active:bg-[#EAE9E4]/80 transition-colors block"
+                className="w-full text-center rounded-2xl bg-[#EAE9E4] py-4 font-medium active:bg-[#EAE9E4]/80 transition-colors block cursor-pointer"
               >
-                Capture photo
+                Posnemi fotografijo
               </button>
               <label
                 htmlFor="file-upload"
                 className="w-full text-center rounded-2xl bg-[#EAE9E4] py-4 font-medium active:bg-[#EAE9E4]/80 transition-colors cursor-pointer block"
               >
-                Attach from photos
+                Izberi iz galerije
               </label>
             </motion.div>
           </>
@@ -443,7 +610,6 @@ export default function App() {
             animate={{ opacity: 1, y: 0 }}
             className="w-full max-w-sm bg-white rounded-[32px] p-4 flex flex-col relative overflow-hidden shadow-sm pb-[20px] min-h-[500px]"
           >
-            {/* Notches */}
             <div className="absolute -left-4 top-[calc(50%+80px)] w-8 h-8 rounded-full bg-[#EAE9E4] z-10" />
             <div className="absolute -right-4 top-[calc(50%+80px)] w-8 h-8 rounded-full bg-[#EAE9E4] z-10" />
 
@@ -464,196 +630,609 @@ export default function App() {
       )}
 
       {screen === "cards" && (
-        <div className="flex-1 flex flex-col items-center justify-center p-4 relative">
-          <div className="absolute top-6 left-6 right-6 z-50 flex items-center justify-between">
+        <div className="flex-1 flex flex-col items-center justify-start p-4 relative min-h-screen">
+          {/* Top Navigation Bar */}
+          <header className="w-full max-w-4xl py-3 px-2 flex items-center justify-between z-50 mb-3 flex-wrap gap-2">
             <button
-              onClick={() => {
-                fetchingRef.current.clear();
-                setUploaded(false);
-                setUploadedImage(null);
-                setCurrentIndex(0);
-                setImages({});
-                setVideos({});
-                setVideoStatus({});
-                setScreen("welcome");
-              }}
-              className="text-sm font-medium text-[#222222]/60 hover:text-[#222222] transition-colors cursor-pointer"
+              onClick={handleReset}
+              className="text-xs font-semibold text-[#222222]/70 hover:text-[#222222] transition-colors cursor-pointer flex items-center gap-1.5 bg-white/80 px-3.5 py-2 rounded-full border border-black/5 shadow-xs"
             >
-              Start Over
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Začni znova</span>
             </button>
-            <button
-              onClick={() => setView3D(true)}
-              className="flex items-center gap-1.5 text-xs font-semibold bg-white text-[#222222] px-3.5 py-2 rounded-full border border-[#222222]/15 shadow-sm hover:bg-[#faf9f6] active:scale-95 transition-all cursor-pointer"
-            >
-              <Box className="w-4 h-4 text-amber-600" />
-              <span>3D Soba</span>
-            </button>
-          </div>
-          <div className="w-full max-w-sm relative grid mt-6">
-            <AnimatePresence initial={false}>
-              {currentIndex < STYLE_CONFIGS.length ? (
-                <motion.div
-                  key={currentIndex}
-                  drag="y"
-                  dragConstraints={{ top: 0, bottom: 0 }}
-                  onDragEnd={handleDragEnd}
-                  initial={{ y: 50, opacity: 0, scale: 0.95 }}
-                  animate={{ y: 0, opacity: 1, scale: 1, zIndex: 10 }}
-                  exit={{ y: -300, opacity: 0, scale: 0.9, zIndex: 0 }}
-                  transition={{ type: "spring", damping: 25, stiffness: 200 }}
-                  className="[grid-area:1/1] w-full h-full bg-white rounded-[32px] flex flex-col shadow-sm cursor-grab active:cursor-grabbing pb-[20px] relative"
-                  style={{ touchAction: "none" }}
-                >
-                  <div className="p-4 relative flex-none">
-                    <div className="w-full aspect-[4/3] rounded-[20px] overflow-hidden bg-[#EAE9E4]/60 flex items-center justify-center relative select-none">
-                      {isComparing && uploadedImage ? (
-                        <img
-                          src={uploadedImage}
-                          className="w-full h-full object-cover pointer-events-none"
-                          alt="Original soba"
-                        />
-                      ) : videos[STYLE_CONFIGS[currentIndex].id] ? (
-                        <video
-                           autoPlay
-                           loop
-                           muted
-                           playsInline
-                           className="w-full h-full object-cover"
-                           src={videos[STYLE_CONFIGS[currentIndex].id].startsWith('blob:') || videos[STYLE_CONFIGS[currentIndex].id].startsWith('data:') ? videos[STYLE_CONFIGS[currentIndex].id] : `/api/video/${videos[STYLE_CONFIGS[currentIndex].id]}`}
-                        />
-                      ) : images[STYLE_CONFIGS[currentIndex].id] ? (
-                        <motion.img
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          src={images[STYLE_CONFIGS[currentIndex].id]}
-                          className="w-full h-full object-cover pointer-events-none"
-                          alt={STYLE_CONFIGS[currentIndex].name}
-                        />
-                      ) : (
-                        <Loader2 className="w-8 h-8 animate-spin text-[#222222]/30" />
-                      )}
 
-                      {/* State Badge */}
-                      <div className="absolute top-3 left-3 bg-[#1c1d22]/80 text-white text-[10px] font-semibold tracking-wider px-2.5 py-1 rounded-full uppercase shadow-xs">
-                        {isComparing ? 'Original soba' : STYLE_CONFIGS[currentIndex].name}
+            {/* View Mode Toggle: Cards vs Grid Gallery */}
+            <div className="flex items-center gap-1 bg-white/90 p-1 rounded-full border border-black/10 shadow-xs">
+              <button
+                onClick={() => setIsGridView(false)}
+                className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  !isGridView 
+                    ? 'bg-[#222222] text-white shadow-xs' 
+                    : 'text-[#222222]/70 hover:text-[#222222]'
+                }`}
+              >
+                <span>🃏 Kartica</span>
+              </button>
+              <button
+                onClick={() => {
+                  setIsGridView(true);
+                  fetchAllRemainingImages();
+                }}
+                className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  isGridView 
+                    ? 'bg-[#222222] text-white shadow-xs' 
+                    : 'text-[#222222]/70 hover:text-[#222222]'
+                }`}
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+                <span>⊞ Vseh 10 stilov</span>
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  setSelected3DStyleId(STYLE_CONFIGS[currentIndex]?.id || 'japandi');
+                  setView3D(true);
+                }}
+                className="flex items-center gap-1.5 text-xs font-semibold bg-white text-[#222222] px-3.5 py-2 rounded-full border border-[#222222]/15 shadow-xs hover:bg-[#faf9f6] active:scale-95 transition-all cursor-pointer"
+              >
+                <Box className="w-4 h-4 text-amber-600" />
+                <span>3D Soba</span>
+              </button>
+            </div>
+          </header>
+
+          {/* MAIN CONTENT AREA */}
+          {isGridView ? (
+            /* =================== GRID GALLERY VIEW =================== */
+            <div className="w-full max-w-5xl pb-16 animate-in fade-in duration-300">
+              <div className="flex flex-col sm:flex-row items-center justify-between mb-6 gap-3">
+                <div className="text-center sm:text-left">
+                  <h2 className="text-2xl font-bold font-syncopate tracking-tight text-[#222222]">
+                    Galerija vseh 10 slogov
+                  </h2>
+                  <p className="text-xs text-[#222222]/60 mt-0.5">
+                    Hitra primerjava, prilagajanje tona ter 3D ogled celotnega kataloga stilov.
+                  </p>
+                </div>
+
+                {/* Filter Chips: All vs Favorites */}
+                <div className="flex items-center gap-1.5 bg-white/80 p-1 rounded-full border border-black/10 shadow-xs">
+                  <button
+                    onClick={() => setFilterFavoritesOnly(false)}
+                    className={`px-3 py-1 text-xs font-semibold rounded-full transition-all cursor-pointer ${
+                      !filterFavoritesOnly
+                        ? 'bg-[#222222] text-white shadow-xs'
+                        : 'text-[#222222]/60 hover:text-[#222222]'
+                    }`}
+                  >
+                    Vsi ({STYLE_CONFIGS.length})
+                  </button>
+                  <button
+                    onClick={() => setFilterFavoritesOnly(true)}
+                    className={`px-3 py-1 text-xs font-semibold rounded-full transition-all cursor-pointer flex items-center gap-1 ${
+                      filterFavoritesOnly
+                        ? 'bg-rose-600 text-white shadow-xs'
+                        : 'text-[#222222]/60 hover:text-[#222222]'
+                    }`}
+                  >
+                    <Heart className="w-3 h-3 fill-current" />
+                    <span>Priljubljeni ({favorites.length})</span>
+                  </button>
+                </div>
+              </div>
+
+              {displayedStyles.length === 0 ? (
+                <div className="text-center py-16 bg-white/60 rounded-3xl border border-black/5 p-8">
+                  <div className="text-4xl mb-3">❤️</div>
+                  <h3 className="font-bold text-base text-[#222222]">Ni shranjenih priljubljenih slogov</h3>
+                  <p className="text-xs text-[#222222]/60 mt-1 max-w-sm mx-auto">
+                    Kliknite na srček pri kateremkoli slogu, da ga dodate v zbirko svojih favoritov.
+                  </p>
+                  <button
+                    onClick={() => setFilterFavoritesOnly(false)}
+                    className="mt-4 px-4 py-2 bg-[#222222] text-white text-xs font-semibold rounded-full cursor-pointer"
+                  >
+                    Prikaži vse sloge
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {displayedStyles.map((style) => {
+                    const idx = STYLE_CONFIGS.findIndex(s => s.id === style.id);
+                    const img = images[style.id];
+                    const isFav = favorites.includes(style.id);
+
+                    return (
+                      <div
+                        key={style.id}
+                        className="bg-white rounded-[24px] p-3.5 shadow-xs border border-black/5 flex flex-col hover:shadow-md transition-shadow group"
+                      >
+                        {/* Image Preview Container */}
+                        <div className="w-full aspect-[4/3] rounded-[18px] overflow-hidden bg-[#EAE9E4]/70 relative flex items-center justify-center">
+                          {img ? (
+                            <img
+                              src={img}
+                              alt={style.name}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                            />
+                          ) : (
+                            <div className="flex flex-col items-center gap-2 text-[#222222]/40">
+                              <Loader2 className="w-6 h-6 animate-spin text-amber-600" />
+                              <span className="text-[10px] uppercase font-bold tracking-wider">Obdelava...</span>
+                            </div>
+                          )}
+
+                          {/* Style badge */}
+                          <div className="absolute top-2.5 left-2.5 bg-[#1c1d22]/80 text-white text-[9px] font-bold tracking-wider px-2 py-0.5 rounded-full uppercase shadow-xs">
+                            {style.name}
+                          </div>
+
+                          {/* Action icons on top right */}
+                          <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5">
+                            {/* Favorite Button */}
+                            <button
+                              onClick={(e) => toggleFavorite(style.id, e)}
+                              title={isFav ? "Odstrani iz priljubljenih" : "Dodaj med priljubljene"}
+                              className={`p-1.5 rounded-full shadow-xs active:scale-90 transition-transform cursor-pointer ${
+                                isFav ? 'bg-rose-50 text-rose-600' : 'bg-white/90 text-[#222222]'
+                              }`}
+                            >
+                              <Heart className={`w-3.5 h-3.5 ${isFav ? 'fill-rose-600' : ''}`} />
+                            </button>
+
+                            {/* Download Button */}
+                            {img && (
+                              <button
+                                onClick={() => handleDownloadImage(style.id, style.name)}
+                                title="Prenesi sliko"
+                                className="bg-white/90 hover:bg-white text-[#222222] p-1.5 rounded-full shadow-xs active:scale-90 transition-transform cursor-pointer"
+                              >
+                                <Download className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Content & Palette */}
+                        <div className="p-2 pt-3 flex-1 flex flex-col">
+                          <div className="flex items-center justify-between mb-1.5">
+                            <h3 className="font-bold text-sm text-[#222222]">{style.name}</h3>
+                            
+                            {/* Mini Palette dots */}
+                            <div className="flex items-center gap-1">
+                              {style.palette.map((swatch) => (
+                                <div
+                                  key={swatch.hex}
+                                  title={`${swatch.name} (${swatch.hex})`}
+                                  style={{ backgroundColor: swatch.hex }}
+                                  className="w-3 h-3 rounded-full border border-black/10 shadow-xs"
+                                />
+                              ))}
+                            </div>
+                          </div>
+
+                          <p className="text-[11px] text-[#222222]/70 leading-relaxed line-clamp-2 mb-3">
+                            {style.description}
+                          </p>
+
+                          {/* Card Action Buttons */}
+                          <div className="mt-auto grid grid-cols-4 gap-1 pt-2 border-t border-black/5">
+                            <button
+                              onClick={() => {
+                                setCurrentIndex(idx >= 0 ? idx : 0);
+                                setIsGridView(false);
+                              }}
+                              className="px-1.5 py-1.5 rounded-xl bg-[#faf9f6] hover:bg-black/5 text-[#222222] text-[10px] font-semibold text-center transition-colors cursor-pointer"
+                              title="Primerjaj ta slog v kartici"
+                            >
+                              Primerjaj
+                            </button>
+
+                            {/* Fine-Tuner button */}
+                            <button
+                              disabled={!img}
+                              onClick={() => {
+                                if (img) {
+                                  setTuneTargetStyle({ id: style.id, name: style.name, image: img });
+                                }
+                              }}
+                              className="px-1.5 py-1.5 rounded-xl bg-[#faf9f6] hover:bg-black/5 text-[#222222] text-[10px] font-semibold text-center transition-colors cursor-pointer flex items-center justify-center gap-0.5 disabled:opacity-40"
+                              title="Prilagodi svetlobo, kontrast in barvni ton"
+                            >
+                              <Sliders className="w-2.5 h-2.5 text-neutral-600" />
+                              <span>Uredi</span>
+                            </button>
+
+                            <button
+                              onClick={() => setActiveMoodboardStyle(style)}
+                              className="px-1.5 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 text-[10px] font-semibold text-center transition-colors cursor-pointer flex items-center justify-center gap-0.5"
+                              title="Pokaži arhitekturni moodboard in oceno stroškov"
+                            >
+                              <Palette className="w-2.5 h-2.5 text-amber-600" />
+                              <span>Slog</span>
+                            </button>
+
+                            <button
+                              onClick={() => handleOpen3DWithStyle(style.id)}
+                              className="px-1.5 py-1.5 rounded-xl bg-[#222222] hover:bg-[#333333] text-white text-[10px] font-semibold text-center transition-colors cursor-pointer flex items-center justify-center gap-0.5"
+                              title="Odpri v 3D pogledu"
+                            >
+                              <Box className="w-2.5 h-2.5 text-amber-400" />
+                              <span>3D</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          ) : (
+            /* =================== SINGLE CARD DECK VIEW =================== */
+            <div className="w-full max-w-sm relative grid mt-2">
+              <AnimatePresence initial={false}>
+                {currentIndex < STYLE_CONFIGS.length ? (
+                  <motion.div
+                    key={currentIndex}
+                    drag="y"
+                    dragConstraints={{ top: 0, bottom: 0 }}
+                    onDragEnd={handleDragEnd}
+                    initial={{ y: 50, opacity: 0, scale: 0.95 }}
+                    animate={{ y: 0, opacity: 1, scale: 1, zIndex: 10 }}
+                    exit={{ y: -300, opacity: 0, scale: 0.9, zIndex: 0 }}
+                    transition={{ type: "spring", damping: 25, stiffness: 200 }}
+                    className="[grid-area:1/1] w-full bg-white rounded-[32px] flex flex-col shadow-sm cursor-grab active:cursor-grabbing pb-[20px] relative"
+                    style={{ touchAction: "none" }}
+                  >
+                    <div className="p-4 relative flex-none">
+                      <div
+                        ref={splitContainerRef}
+                        onPointerMove={(e) => {
+                          if (isSplitMode && splitContainerRef.current) {
+                            const rect = splitContainerRef.current.getBoundingClientRect();
+                            const x = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+                            setSplitPercent(Math.round((x / rect.width) * 100));
+                          }
+                        }}
+                        className="w-full aspect-[4/3] rounded-[20px] overflow-hidden bg-[#EAE9E4]/60 flex items-center justify-center relative select-none"
+                      >
+                        {isSplitMode && uploadedImage && images[STYLE_CONFIGS[currentIndex].id] ? (
+                          <>
+                            {/* Base: Stylized Image or Dual Style Right */}
+                            {splitModeType === 'dualStyle' && images[dualCompareRightStyleId] ? (
+                              <img
+                                src={images[dualCompareRightStyleId]}
+                                className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+                                alt="Desni stil"
+                              />
+                            ) : (
+                              <img
+                                src={images[STYLE_CONFIGS[currentIndex].id]}
+                                className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+                                alt="Stilizirana soba"
+                              />
+                            )}
+
+                            {/* Clipped: Original Room or Dual Style Left */}
+                            <div
+                              className="absolute inset-0 overflow-hidden pointer-events-none"
+                              style={{ clipPath: `inset(0 ${100 - splitPercent}% 0 0)` }}
+                            >
+                              <img
+                                src={splitModeType === 'dualStyle' ? images[STYLE_CONFIGS[currentIndex].id] : uploadedImage}
+                                className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+                                alt="Levi primerjalni element"
+                              />
+                              <div className="absolute bottom-3 left-3 bg-[#1c1d22]/80 text-white text-[9px] font-bold tracking-wider px-2.5 py-1 rounded-full uppercase shadow-xs">
+                                {splitModeType === 'dualStyle' ? STYLE_CONFIGS[currentIndex].name : 'Original'}
+                              </div>
+                            </div>
+
+                            <div className="absolute bottom-3 right-3 bg-[#1c1d22]/80 text-white text-[9px] font-bold tracking-wider px-2.5 py-1 rounded-full uppercase shadow-xs pointer-events-none">
+                              {splitModeType === 'dualStyle' 
+                                ? (STYLE_CONFIGS.find(s => s.id === dualCompareRightStyleId)?.name || dualCompareRightStyleId)
+                                : STYLE_CONFIGS[currentIndex].name}
+                            </div>
+
+                            {/* Divider Line & Grip Handle */}
+                            <div
+                              className="absolute top-0 bottom-0 w-0.5 bg-white shadow-xl pointer-events-none z-20 flex items-center justify-center"
+                              style={{ left: `${splitPercent}%` }}
+                            >
+                              <div className="w-7 h-7 rounded-full bg-white text-[#222222] shadow-md flex items-center justify-center text-[10px] font-bold border border-black/10">
+                                ↔
+                              </div>
+                            </div>
+                          </>
+                        ) : isComparing && uploadedImage ? (
+                          <img
+                            src={uploadedImage}
+                            className="w-full h-full object-cover pointer-events-none"
+                            alt="Original soba"
+                          />
+                        ) : videos[STYLE_CONFIGS[currentIndex].id] ? (
+                          <video
+                             autoPlay
+                             loop
+                             muted
+                             playsInline
+                             className="w-full h-full object-cover"
+                             src={videos[STYLE_CONFIGS[currentIndex].id].startsWith('blob:') || videos[STYLE_CONFIGS[currentIndex].id].startsWith('data:') ? videos[STYLE_CONFIGS[currentIndex].id] : `/api/video/${videos[STYLE_CONFIGS[currentIndex].id]}`}
+                          />
+                        ) : images[STYLE_CONFIGS[currentIndex].id] ? (
+                          <motion.img
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            src={images[STYLE_CONFIGS[currentIndex].id]}
+                            className="w-full h-full object-cover pointer-events-none"
+                            alt={STYLE_CONFIGS[currentIndex].name}
+                          />
+                        ) : (
+                          <Loader2 className="w-8 h-8 animate-spin text-[#222222]/30" />
+                        )}
+
+                        {/* Top Badges & Favorite Heart */}
+                        {!isSplitMode && (
+                          <div className="absolute top-3 left-3 bg-[#1c1d22]/80 text-white text-[10px] font-semibold tracking-wider px-2.5 py-1 rounded-full uppercase shadow-xs">
+                            {isComparing ? 'Original soba' : STYLE_CONFIGS[currentIndex].name}
+                          </div>
+                        )}
+
+                        {/* Action Buttons on Image */}
+                        <div className="absolute top-3 right-3 flex items-center gap-1.5">
+                          {/* Heart favorite toggle */}
+                          <button
+                            onClick={(e) => toggleFavorite(STYLE_CONFIGS[currentIndex].id, e)}
+                            title={favorites.includes(STYLE_CONFIGS[currentIndex].id) ? "Odstrani iz priljubljenih" : "Dodaj med priljubljene"}
+                            className={`p-2 rounded-full shadow-sm active:scale-90 transition-transform cursor-pointer ${
+                              favorites.includes(STYLE_CONFIGS[currentIndex].id)
+                                ? 'bg-rose-50 text-rose-600'
+                                : 'bg-white/90 text-[#222222] hover:bg-white'
+                            }`}
+                          >
+                            <Heart className={`w-3.5 h-3.5 ${favorites.includes(STYLE_CONFIGS[currentIndex].id) ? 'fill-rose-600' : ''}`} />
+                          </button>
+
+                          {images[STYLE_CONFIGS[currentIndex].id] && !isComparing && (
+                            <button
+                              onClick={() => handleDownloadImage(STYLE_CONFIGS[currentIndex].id, STYLE_CONFIGS[currentIndex].name)}
+                              title="Prenesi stilizirano sliko"
+                              className="bg-white/90 hover:bg-white text-[#222222] p-2 rounded-full shadow-sm active:scale-90 transition-transform cursor-pointer"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
                       </div>
 
-                      {/* Download Button on image */}
-                      {images[STYLE_CONFIGS[currentIndex].id] && !isComparing && (
+                      {/* Split Mode Mode Selector Bar (Original vs Dual Style) */}
+                      {isSplitMode && (
+                        <div className="mt-2.5 flex items-center justify-between gap-2 px-1">
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => setSplitModeType('original')}
+                              className={`px-2.5 py-1 rounded-full text-[10px] font-semibold transition-all cursor-pointer ${
+                                splitModeType === 'original'
+                                  ? 'bg-[#222222] text-white'
+                                  : 'bg-black/5 text-[#222222]/70 hover:bg-black/10'
+                              }`}
+                            >
+                              Original vs Stil
+                            </button>
+                            <button
+                              onClick={() => {
+                                setSplitModeType('dualStyle');
+                                fetchImage(STYLE_CONFIGS.findIndex(s => s.id === dualCompareRightStyleId));
+                              }}
+                              className={`px-2.5 py-1 rounded-full text-[10px] font-semibold transition-all cursor-pointer ${
+                                splitModeType === 'dualStyle'
+                                  ? 'bg-[#222222] text-white'
+                                  : 'bg-black/5 text-[#222222]/70 hover:bg-black/10'
+                              }`}
+                            >
+                              Primerjaj 2 stila
+                            </button>
+                          </div>
+
+                          <div className="flex items-center gap-1.5">
+                            {splitModeType === 'dualStyle' && (
+                              <select
+                                value={dualCompareRightStyleId}
+                                onChange={(e) => {
+                                  setDualCompareRightStyleId(e.target.value);
+                                  const foundIdx = STYLE_CONFIGS.findIndex(s => s.id === e.target.value);
+                                  if (foundIdx >= 0) fetchImage(foundIdx);
+                                }}
+                                className="text-[10px] bg-white border border-black/15 rounded-lg px-2 py-0.5 font-semibold text-[#222222] cursor-pointer"
+                              >
+                                {STYLE_CONFIGS.filter(s => s.id !== STYLE_CONFIGS[currentIndex].id).map(s => (
+                                  <option key={s.id} value={s.id}>
+                                    {s.name}
+                                  </option>
+                                ))}
+                              </select>
+                            )}
+
+                            {/* Export Comparison Button */}
+                            <button
+                              onClick={handleDownloadComparison}
+                              title="Prenesi sliko primerjave (Side-by-side)"
+                              className="p-1 rounded-full bg-black/5 hover:bg-black/10 text-[#222222] transition-colors cursor-pointer flex items-center justify-center"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Vertical centering notches relative to the space between image and text */}
+                    <div className="absolute -left-4 top-[calc(50%+80px)] w-8 h-8 rounded-full bg-[#EAE9E4] pointer-events-none z-10" />
+                    <div className="absolute -right-4 top-[calc(50%+80px)] w-8 h-8 rounded-full bg-[#EAE9E4] pointer-events-none z-10" />
+
+                    <div className="px-6 flex-1 flex flex-col justify-center mt-1 pb-5">
+                      <h2 className="text-[#222222] text-[19px] font-medium leading-snug tracking-tight">
+                        {STYLE_CONFIGS[currentIndex].description}
+                      </h2>
+
+                      {/* Mini palette dots on card */}
+                      <div className="flex items-center gap-1.5 mt-3">
+                        {STYLE_CONFIGS[currentIndex].palette.map(swatch => (
+                          <div
+                            key={swatch.hex}
+                            title={`${swatch.name} (${swatch.hex})`}
+                            style={{ backgroundColor: swatch.hex }}
+                            className="w-3.5 h-3.5 rounded-full border border-black/10 shadow-xs"
+                          />
+                        ))}
+                        <span className="text-[10px] text-[#222222]/50 ml-1">Karakterne barve</span>
+                      </div>
+                    </div>
+
+                    {/* Card Actions Footer */}
+                    <div className="px-5 mt-auto flex items-center gap-1.5 flex-wrap">
+                      {/* Hold to Compare Button */}
+                      {uploadedImage && !isSplitMode && (
                         <button
-                          onClick={() => handleDownloadImage(STYLE_CONFIGS[currentIndex].id, STYLE_CONFIGS[currentIndex].name)}
-                          title="Prenesi stilizirano sliko"
-                          className="absolute top-3 right-3 bg-white/90 hover:bg-white text-[#222222] p-2 rounded-full shadow-sm active:scale-90 transition-transform cursor-pointer"
+                          onMouseDown={() => setIsComparing(true)}
+                          onMouseUp={() => setIsComparing(false)}
+                          onTouchStart={() => setIsComparing(true)}
+                          onTouchEnd={() => setIsComparing(false)}
+                          title="Držite za primerjavo z originalom"
+                          className="h-9 px-2.5 rounded-full border border-[#222222]/15 flex items-center justify-center gap-1 bg-white shrink-0 shadow-xs active:bg-[#222222] active:text-white transition-all text-xs font-medium text-[#222222] cursor-pointer"
                         >
-                          <Download className="w-3.5 h-3.5" />
+                          <Eye className="w-3 h-3" />
+                          <span className="hidden sm:inline">Primerjaj</span>
                         </button>
                       )}
-                    </div>
-                  </div>
 
-                  {/* Vertical centering notches relative to the space between image and text */}
-                  <div className="absolute -left-4 top-[calc(50%+80px)] w-8 h-8 rounded-full bg-[#EAE9E4] pointer-events-none z-10" />
-                  <div className="absolute -right-4 top-[calc(50%+80px)] w-8 h-8 rounded-full bg-[#EAE9E4] pointer-events-none z-10" />
-
-                  <div className="px-6 flex-1 flex flex-col justify-center mt-2 pb-6">
-                    <h2 className="text-[#222222] text-[22px] font-medium leading-snug tracking-tight">
-                      {STYLE_CONFIGS[currentIndex].description}
-                    </h2>
-                  </div>
-
-                  <div className="px-6 mt-auto flex items-center gap-2">
-                    <div className="border border-[#222222]/15 rounded-full px-3.5 py-2.5 bg-white shrink-0">
-                      <span className="text-[#222222] text-xs font-semibold tracking-wide">
-                        {STYLE_CONFIGS[currentIndex].name}
-                      </span>
-                    </div>
-
-                    {/* Hold to Compare Button */}
-                    {uploadedImage && (
-                      <button
-                        onMouseDown={() => setIsComparing(true)}
-                        onMouseUp={() => setIsComparing(false)}
-                        onTouchStart={() => setIsComparing(true)}
-                        onTouchEnd={() => setIsComparing(false)}
-                        title="Držite za primerjavo z originalom"
-                        className="h-11 px-3 rounded-full border border-[#222222]/15 flex items-center justify-center gap-1 bg-white shrink-0 shadow-xs active:bg-[#222222] active:text-white transition-all text-xs font-medium text-[#222222] cursor-pointer"
-                      >
-                        <Eye className="w-3.5 h-3.5" />
-                        <span className="hidden sm:inline">Primerjaj</span>
-                      </button>
-                    )}
-
-                    <button 
-                      onClick={() => setView3D(true)}
-                      title="Odpri ta stil v interaktivnem 3D pogledu"
-                      className="h-11 px-3.5 rounded-full border border-[#222222]/15 flex items-center justify-center gap-1 bg-white shrink-0 shadow-sm active:scale-95 transition-transform text-xs font-semibold text-[#222222] cursor-pointer"
-                    >
-                      <Box className="w-3.5 h-3.5 text-amber-600" />
-                      <span>3D</span>
-                    </button>
-                    <button 
-                      onClick={() => {
-                        const base64 = images[STYLE_CONFIGS[currentIndex].id];
-                        if (base64) {
-                           generateVideo(STYLE_CONFIGS[currentIndex].id, base64, STYLE_CONFIGS[currentIndex].description);
-                        }
-                      }}
-                      disabled={videoStatus[STYLE_CONFIGS[currentIndex].id] === 'generating' || videoStatus[STYLE_CONFIGS[currentIndex].id] === 'polling'}
-                      className="w-11 h-11 rounded-full border border-[#222222]/15 flex items-center justify-center bg-white shrink-0 shadow-sm active:scale-95 transition-transform disabled:opacity-50 disabled:active:scale-100 ml-auto cursor-pointer"
-                      title="Ustvari video"
-                    >
-                      {videoStatus[STYLE_CONFIGS[currentIndex].id] === 'generating' || videoStatus[STYLE_CONFIGS[currentIndex].id] === 'polling' ? (
-                        <Loader2 className="w-5 h-5 text-[#222222] animate-spin" />
-                      ) : (
-                        <Video className="w-5 h-5 text-[#222222]" />
+                      {/* Split Slider Toggle */}
+                      {uploadedImage && images[STYLE_CONFIGS[currentIndex].id] && (
+                        <button
+                          onClick={() => setIsSplitMode(!isSplitMode)}
+                          title={isSplitMode ? "Zapri drsnik" : "Odpri primerjalni drsnik"}
+                          className={`h-9 px-2.5 rounded-full border border-[#222222]/15 flex items-center justify-center gap-1 shrink-0 shadow-xs transition-all text-xs font-medium cursor-pointer ${
+                            isSplitMode ? 'bg-[#222222] text-white font-semibold' : 'bg-white text-[#222222] active:bg-[#222222] active:text-white'
+                          }`}
+                        >
+                          <Columns2 className="w-3 h-3" />
+                          <span>Drsnik</span>
+                        </button>
                       )}
-                    </button>
-                  </div>
-                </motion.div>
-              ) : (
-                <motion.div
-                  key="endState"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="[grid-area:1/1] w-full h-[550px] flex flex-col items-center justify-center p-8 bg-white rounded-[32px] shadow-sm relative z-20 text-center"
-                >
-                  <div className="flex-1 flex flex-col items-center justify-center">
-                    <div className="text-[60px] leading-none mb-4">✨</div>
-                    <h2 className="text-[#222222] text-2xl font-medium tracking-tight mb-2">Some great styles in there.</h2>
-                    <p className="text-[#222222]/60 text-lg">Hope you found the right one.</p>
-                  </div>
-                  <button
-                    onClick={() => {
-                      fetchingRef.current.clear();
-                      setUploaded(false);
-                      setUploadedImage(null);
-                      setCurrentIndex(0);
-                      setImages({});
-                      setVideos({});
-                      setVideoStatus({});
-                      setScreen("welcome");
-                    }}
-                    className="w-full rounded-[32px] bg-[#222222] text-white py-4 text-center font-medium shadow-sm active:scale-[0.98] transition-transform mt-auto shrink-0"
+
+                      {/* Fine-Tuner button */}
+                      {images[STYLE_CONFIGS[currentIndex].id] && (
+                        <button
+                          onClick={() => {
+                            setTuneTargetStyle({
+                              id: STYLE_CONFIGS[currentIndex].id,
+                              name: STYLE_CONFIGS[currentIndex].name,
+                              image: images[STYLE_CONFIGS[currentIndex].id]
+                            });
+                          }}
+                          title="Prilagodi svetlobo, kontrast in barvni ton"
+                          className="h-9 px-2.5 rounded-full border border-[#222222]/15 flex items-center justify-center gap-1 bg-white shrink-0 shadow-xs active:scale-95 transition-all text-xs font-medium text-[#222222] cursor-pointer"
+                        >
+                          <Sliders className="w-3 h-3 text-neutral-600" />
+                          <span className="hidden sm:inline">Uredi</span>
+                        </button>
+                      )}
+
+                      {/* Moodboard / Style Specs Button */}
+                      <button
+                        onClick={() => setActiveMoodboardStyle(STYLE_CONFIGS[currentIndex])}
+                        title="Odpri barve, proračun in nasvete tega sloga"
+                        className="h-9 px-2.5 rounded-full border border-amber-300 bg-amber-50/70 hover:bg-amber-100/70 flex items-center justify-center gap-1 shrink-0 shadow-xs active:scale-95 transition-all text-xs font-semibold text-amber-900 cursor-pointer"
+                      >
+                        <Palette className="w-3 h-3 text-amber-600" />
+                        <span>Slog</span>
+                      </button>
+
+                      {/* 3D Button */}
+                      <button 
+                        onClick={() => handleOpen3DWithStyle(STYLE_CONFIGS[currentIndex].id)}
+                        title="Odpri ta stil v interaktivnem 3D pogledu"
+                        className="h-9 px-3 rounded-full border border-[#222222]/15 flex items-center justify-center gap-1 bg-white shrink-0 shadow-sm active:scale-95 transition-transform text-xs font-semibold text-[#222222] cursor-pointer"
+                      >
+                        <Box className="w-3 h-3 text-amber-600" />
+                        <span>3D</span>
+                      </button>
+
+                      {/* Video Render Button */}
+                      <button 
+                        onClick={() => {
+                          const base64 = images[STYLE_CONFIGS[currentIndex].id];
+                          if (base64) {
+                             generateVideo(STYLE_CONFIGS[currentIndex].id, base64);
+                          }
+                        }}
+                        disabled={videoStatus[STYLE_CONFIGS[currentIndex].id] === 'generating' || videoStatus[STYLE_CONFIGS[currentIndex].id] === 'polling'}
+                        className="w-9 h-9 rounded-full border border-[#222222]/15 flex items-center justify-center bg-white shrink-0 shadow-sm active:scale-95 transition-transform disabled:opacity-50 disabled:active:scale-100 ml-auto cursor-pointer"
+                        title="Ustvari 60fps kinematični video"
+                      >
+                        {videoStatus[STYLE_CONFIGS[currentIndex].id] === 'generating' || videoStatus[STYLE_CONFIGS[currentIndex].id] === 'polling' ? (
+                          <Loader2 className="w-3.5 h-3.5 text-[#222222] animate-spin" />
+                        ) : (
+                          <Video className="w-3.5 h-3.5 text-[#222222]" />
+                        )}
+                      </button>
+                    </div>
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    key="endState"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="[grid-area:1/1] w-full h-[550px] flex flex-col items-center justify-center p-8 bg-white rounded-[32px] shadow-sm relative z-20 text-center"
                   >
-                    Go back to home
-                  </button>
-                </motion.div>
-              )}
-            </AnimatePresence>
-            <AnimatePresence>
-              {currentIndex === 0 && !videoStatus[STYLE_CONFIGS[currentIndex]?.id] && (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.3 }}
-                  className="absolute top-[calc(100%+16px)] text-[10px] text-[#222222]/40 tracking-widest font-medium uppercase text-center w-full"
-                >
-                  SWIPE UP TO SEE MORE STYLES
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+                    <div className="flex-1 flex flex-col items-center justify-center">
+                      <div className="text-[60px] leading-none mb-4">✨</div>
+                      <h2 className="text-[#222222] text-2xl font-medium tracking-tight mb-2">Pregledali ste vseh 10 stilov!</h2>
+                      <p className="text-[#222222]/60 text-sm max-w-xs">Upamo, da ste našli popolno kombinacijo za vaš dom.</p>
+                    </div>
+
+                    <div className="w-full flex flex-col gap-2 mt-auto">
+                      <button
+                        onClick={() => {
+                          setIsGridView(true);
+                          fetchAllRemainingImages();
+                        }}
+                        className="w-full rounded-[24px] bg-amber-500 hover:bg-amber-600 text-white py-3.5 text-center font-semibold text-sm shadow-xs active:scale-[0.98] transition-transform cursor-pointer flex items-center justify-center gap-2"
+                      >
+                        <LayoutGrid className="w-4 h-4" />
+                        <span>Odpri galerijo vseh 10 sob</span>
+                      </button>
+
+                      <button
+                        onClick={handleReset}
+                        className="w-full rounded-[24px] bg-[#222222] text-white py-3.5 text-center font-medium text-sm shadow-xs active:scale-[0.98] transition-transform cursor-pointer"
+                      >
+                        Začni znova z novo sliko
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Swipe hint */}
+              <AnimatePresence>
+                {currentIndex === 0 && !videoStatus[STYLE_CONFIGS[currentIndex]?.id] && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.3 }}
+                    className="absolute top-[calc(100%+16px)] text-[10px] text-[#222222]/40 tracking-widest font-medium uppercase text-center w-full"
+                  >
+                    PODRSNITE NAVZGOR ZA NASLEDNJI SLOG (ALI PREKLOPITE NA MREŽO)
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          )}
         </div>
       )}
 
@@ -675,13 +1254,13 @@ export default function App() {
             <div className="absolute bottom-10 left-0 right-0 flex justify-center items-center gap-8">
               <button
                 onClick={stopCamera}
-                className="px-6 py-3 rounded-full bg-white/20 text-white font-medium backdrop-blur-md"
+                className="px-6 py-3 rounded-full bg-white/20 text-white font-medium backdrop-blur-md cursor-pointer"
               >
-                Cancel
+                Prekliči
               </button>
               <button
                 onClick={capturePhoto}
-                className="w-20 h-20 rounded-full border-4 border-white bg-white/50 backdrop-blur-md"
+                className="w-20 h-20 rounded-full border-4 border-white bg-white/50 backdrop-blur-md cursor-pointer hover:scale-105 active:scale-95 transition-transform"
               />
             </div>
           </motion.div>

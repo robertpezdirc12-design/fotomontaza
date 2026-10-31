@@ -275,7 +275,17 @@ export function createCompositeSofa(palette: StylePalette): THREE.Group {
   group.add(shadow);
 
   group.userData = {
+    id: 'sofa',
     type: 'sofa',
+    name: 'Nordic Lounge Zofa',
+    specs: '224 × 88 × 72 cm',
+    focusPos: new THREE.Vector3(0, 1.2, 1.9),
+    focusLook: new THREE.Vector3(0, 0.5, -0.6),
+    materials: {
+      fabric: fabricMat,
+      wood: woodLegMat,
+      accent: accentCushionMat
+    },
     plinth,
     seat,
     back,
@@ -363,7 +373,16 @@ export function createCompositeCoffeeTable(palette: StylePalette): THREE.Group {
   group.add(shadow);
 
   group.userData = {
+    id: 'coffeeTable',
     type: 'coffeeTable',
+    name: 'Skandinavska kavna mizica',
+    specs: 'Ø 110 × 40 cm',
+    focusPos: new THREE.Vector3(0, 1.2, 1.7),
+    focusLook: new THREE.Vector3(0, 0.35, 0.7),
+    materials: {
+      top: topMat,
+      metal: metalMat
+    },
     top,
     shelf,
     bowl
@@ -451,7 +470,16 @@ export function createCompositeFloorLamp(palette: StylePalette): THREE.Group {
   group.add(shadow);
 
   group.userData = {
+    id: 'floorLamp',
     type: 'floorLamp',
+    name: 'Obločna talna svetilka',
+    specs: 'V: 195 cm, brušena medenina',
+    focusPos: new THREE.Vector3(-0.9, 1.6, 0.1),
+    focusLook: new THREE.Vector3(-1.8, 1.4, -1.2),
+    materials: {
+      base: baseMat,
+      brass: brassMat
+    },
     shade,
     collar,
     bulb
@@ -540,6 +568,18 @@ export function createCompositePlant(palette: StylePalette): THREE.Group {
   const shadow = createContactShadow(0.65, 0.65, 0.4);
   group.add(shadow);
 
+  group.userData = {
+    id: 'plant',
+    type: 'plant',
+    name: 'Ficus & sobna lončnica',
+    specs: 'V: 95 cm, terakota & fikus',
+    focusPos: new THREE.Vector3(1.1, 1.2, 0.1),
+    focusLook: new THREE.Vector3(1.9, 0.6, -1.4),
+    materials: {
+      pot: potMat
+    }
+  };
+
   return group;
 }
 
@@ -583,6 +623,103 @@ export function createCompositeWallArt(palette: StylePalette): THREE.Group {
   art.position.z = 0.025;
   group.add(art);
 
+  group.userData = {
+    id: 'wallArt',
+    type: 'wallArt',
+    name: 'Arhitekturno stensko platno',
+    specs: '160 × 110 cm, shadowbox',
+    focusPos: new THREE.Vector3(0, 2.2, -0.4),
+    focusLook: new THREE.Vector3(0, 2.15, -2.5),
+    materials: {
+      frame: frameMat,
+      canvas: canvasMat
+    }
+  };
+
+  return group;
+}
+
+/**
+ * 6. Composite Modern Architectural Pendant Light
+ * Suspended from ceiling with canopy, sleek braided cord, spun conical shade, and glowing diffuser.
+ */
+export function createCompositePendantLight(palette: StylePalette): THREE.Group {
+  const group = new THREE.Group();
+
+  const cordMat = new THREE.MeshStandardMaterial({
+    color: 0x1a1a1a,
+    roughness: 0.7,
+    metalness: 0.1
+  });
+
+  const shadeMat = new THREE.MeshStandardMaterial({
+    color: palette.metalColor,
+    roughness: 0.35,
+    metalness: palette.metalness
+  });
+
+  const bulbMat = new THREE.MeshStandardMaterial({
+    color: 0xfff6e0,
+    emissive: 0xffd280,
+    emissiveIntensity: 0.8,
+    roughness: 0.2
+  });
+
+  // Ceiling canopy mount
+  const canopyGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.02, 24);
+  const canopy = new THREE.Mesh(canopyGeo, cordMat);
+  canopy.position.y = 3.39;
+  group.add(canopy);
+
+  // Cord dropping down
+  const cordHeight = 1.1;
+  const cordGeo = new THREE.CylinderGeometry(0.006, 0.006, cordHeight, 8);
+  const cord = new THREE.Mesh(cordGeo, cordMat);
+  cord.position.y = 3.4 - cordHeight / 2;
+  group.add(cord);
+
+  // Spun metal conical shade
+  const shadeGeo = new THREE.ConeGeometry(0.24, 0.22, 32, 1, true);
+  const shade = new THREE.Mesh(shadeGeo, shadeMat);
+  shade.position.y = 3.4 - cordHeight - 0.08;
+  shade.castShadow = true;
+  group.add(shade);
+
+  // Frosted inner bulb / diffuser
+  const bulbGeo = new THREE.SphereGeometry(0.065, 24, 24);
+  const bulb = new THREE.Mesh(bulbGeo, bulbMat);
+  bulb.position.y = 3.4 - cordHeight - 0.12;
+  group.add(bulb);
+
+  group.userData = {
+    id: 'pendantLight',
+    type: 'pendantLight',
+    name: 'Viseče arhitekturno svetilo',
+    specs: 'Premer 24 cm, brušena kovina',
+    focusPos: new THREE.Vector3(0.8, 2.2, 1.8),
+    focusLook: new THREE.Vector3(0, 2.1, 0.7),
+    materials: {
+      shade: shadeMat,
+      bulb: bulbMat
+    },
+    shade,
+    bulb
+  };
+
+  return group;
+}
+
+/**
+ * Creates an architectural blueprint grid with subtle dimension lines
+ */
+export function createArchitecturalGrid(): THREE.Group {
+  const group = new THREE.Group();
+  const grid = new THREE.GridHelper(8, 16, 0x3b82f6, 0x94a3b8);
+  grid.position.y = 0.012;
+  const mat = grid.material as THREE.Material;
+  mat.transparent = true;
+  mat.opacity = 0.45;
+  group.add(grid);
   return group;
 }
 
@@ -609,6 +746,11 @@ export function applyExplodedDisplacement(furnitureGroup: THREE.Group, progress:
       if (shade) shade.position.y = 1.75 + progress * 0.35;
       if (collar) collar.position.y = 1.34 + progress * 0.18;
       if (bulb) bulb.position.y = 1.66 + progress * 0.35;
+    } else if (child.userData && child.userData.type === 'pendantLight') {
+      const { shade, bulb } = child.userData;
+      if (shade) shade.position.y = 2.22 - progress * 0.25;
+      if (bulb) bulb.position.y = 2.18 - progress * 0.25;
     }
   });
 }
+
